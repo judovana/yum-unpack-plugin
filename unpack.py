@@ -34,7 +34,7 @@ allpkgs = None
 def init_hook(conduit):
     conduit.info(2, '***********************WARNING**************************');
     conduit.info(2, '                 Unpack plugin active')
-    conduit.info(2, 'Selected packagesunpacked to /opt or where destination in unpack.conf points.
+    conduit.info(2, 'Selected packagesunpacked to /opt or where destination in unpack.conf points.')
     conduit.info(2, 'Special exclusion/forcing from that confing is cosidered.')
     conduit.info(2, 'See the README.md page of and unpack.conf and eventuelly also unpack.py for more info.')
     conduit.info(2, '********************************************************');
