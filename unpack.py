@@ -241,12 +241,13 @@ def pretrans_hook(conduit):
 
 
 if __name__ == '__main__':
+    print  "Utility to test various regexes. Put yur regexes as arguments and then test matches"
     for idx, val in enumerate(sys.argv):
         if idx == 0:
             continue
-        print  "compiling " + val
+        print  "  compiling " + val
         re.compile(val)
-        print  "done"
+        print  "  done"
     print  "You cannow type  strings which will be tried if they match your regexes from commandline."
     print  "press ctrl+D or ctrl+C to end"
     while True:
@@ -257,8 +258,8 @@ if __name__ == '__main__':
         for idx, val in enumerate(sys.argv):
             if idx == 0:
                 continue
-            print  "'"+s + "' matches '" + val + "' ?"
+            print  "  '"+s + "' matches '" + val + "' ?"
             if re.compile(val).match(s):
-                print  " True"
+                print  "    True"
             else:
-                print  " False"
+                print  "    False"
