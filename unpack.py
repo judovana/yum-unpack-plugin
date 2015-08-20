@@ -246,14 +246,25 @@ def postdownload_hook(conduit):
         name = s.envra
         # epoch is included in regex anyway
         if pattern3.match(name):
+            group = False
             conduit.info(3, ID_PRFIX+name + ' matching ' + resrc3)
             if name == basePackageENVRA:
                 conduit.info(2, ID_PRFIX+name+" is main package itself");
+                conduit.info(2, ID_PRFIX+"NOT grouping");
             else:
                 conduit.info(2, ID_PRFIX+name+" is subpackage of " + getArch(basePackageENVRA)[0]);
+                if groupSubpackages.match(basePackageENVRA):
+                    conduit.info(2, ID_PRFIX+"Grouping! "+basePackageENVRA + ' matched ' + groupSubpackagesSrc);
+                    group = True
+                else:
+                    conduit.info(2, ID_PRFIX+"NOT grouping "+basePackageENVRA + ' not matched ' + groupSubpackagesSrc);
+            conduit.info(2, ID_PRFIX+"Proecessing:" + s.localPkg());
+            if group and basePackageAproxArch != "noarch":
+                name=basePackageENVRA
+            if group and basePackageAproxArch == "noarch":
+                conduit.info(2, ID_PRFIX+"This package is subpackage and should be grupped.However is noarch. Currently I dont know what to do with noarchs. NOT grouping");
             if trimEpoch:
                 name = getEpoch(name)[1]
-            conduit.info(2, ID_PRFIX+"Proecessing:" + s.localPkg());
             xcwd=path+"/"+name
             if not os.path.exists(xcwd):
                 os.makedirs(xcwd)
@@ -263,10 +274,10 @@ def postdownload_hook(conduit):
                 FNULL = open(os.devnull, 'w')
             else:
                 FNULL=PIPE
-            #p1 = Popen(["rpm2cpio", s.localPkg()], stdout=PIPE, stderr=None, preexec_fn=None, close_fds=False, shell=False, cwd=xcwd)
-            #p2 = Popen(["cpio", "-idmv"], stdin=p1.stdout, stdout=FNULL, stderr=FNULL, preexec_fn=None, close_fds=False, shell=False, cwd=xcwd)
-            #p1.stdout.close()  # Allow p1 to receive a SIGPIPE if p2 exits.
-            #output = p2.communicate()[0]
+            p1 = Popen(["rpm2cpio", s.localPkg()], stdout=PIPE, stderr=None, preexec_fn=None, close_fds=False, shell=False, cwd=xcwd)
+            p2 = Popen(["cpio", "-idmv"], stdin=p1.stdout, stdout=FNULL, stderr=FNULL, preexec_fn=None, close_fds=False, shell=False, cwd=xcwd)
+            p1.stdout.close()  # Allow p1 to receive a SIGPIPE if p2 exits.
+            output = p2.communicate()[0]
         else:
             conduit.info(2, ID_PRFIX+name + ' NOT matching ' + resrc3)
     if exitAfterUnpack:
