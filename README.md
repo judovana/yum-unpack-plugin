@@ -72,6 +72,10 @@ destination/pkg-1.i686/usr/lib/pkg.so
 destination/pkg-1.i686/usr/lib/pkg.so.full
 destination/pkg-1.i686/usr/share/pkg.txt
 
+**note**
+If you are yusing sgrouping, and subpackage is NOARCH,  parent package MUST APPEAR in transaction, otherwise this subpackage will not be groouped (will unpacak normally)
+This is happening, because for noarch packages parent can be arched, so it can not be plainly guessed (like with arched subpackages).
+
 The unpack.py can serve also as simple program, where you can test your regexes. see eg:
 [jvanek@jvanek yum-unpack-plugin]$ python unpack.py  "a.*b"
 Utility to test various regexes. Put yur regexes as arguments and then test matches
