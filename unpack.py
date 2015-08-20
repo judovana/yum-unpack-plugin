@@ -19,6 +19,7 @@ resrc1_forceIn=NEVER_MATCH
 resrc1_forceOut=NEVER_MATCH
 resrc2=ALL_MATCH
 resrc3=NEVER_MATCH
+groupSubpackagesSrc=NEVER_MATCH
 pattern1 = None
 pattern1_forceIn = None
 pattern1_forceOut = None
@@ -29,7 +30,7 @@ debuglevel=None
 exitAfterUnpack = False
 allpkgs = None
 trimEpoch = False
-groupSubpackages = []
+groupSubpackages = None
 
 # all conduits described at http://yum.baseurl.org/api/yum/yum/plugins.html
 # the hooks in http://yum.baseurl.org/wiki/WritingYumPlugins are not in any order, here they are ordered as yum is launching them
@@ -50,12 +51,13 @@ def init_hook(conduit):
     global resrc2
     global resrc3
     global trimEpoch
-    global groupSubpackages
+    global groupSubpackagesSrc
     global pattern1
     global pattern1_forceIn
     global pattern1_forceOut
     global pattern2
     global pattern3
+    global groupSubpackages
     s = conduit.confString('main', 'destination', path)
     path = s
     s = conduit.confString('main', 'filter_pre1_repo', resrc1)
@@ -72,13 +74,15 @@ def init_hook(conduit):
     exitAfterUnpack = s
     s = conduit.confBool('main', 'trim_epoch', False)
     trimEpoch = s
-    groupsToBeSplit = conduit.confString('main', 'group_subpackages', resrc3)
+    s = conduit.confString('main', 'group_subpackages', groupSubpackagesSrc)
+    groupSubpackagesSrc = s
     pattern1 = re.compile(resrc1)
     pattern1_forceIn = re.compile(resrc1_forceIn)
     pattern1_forceOut = re.compile(resrc1_forceOut)
     pattern2 = re.compile(resrc2)
     pattern3 = re.compile(resrc3)
-    groupSubpackages = groupsToBeSplit.split()
+    pattern3 = re.compile(resrc3)
+    groupSubpackages  = re.compile(groupSubpackagesSrc)
     conduit.info(2, ID_PRFIX+'unpack to ' + path);
     conduit.info(2, ID_PRFIX+'filter_pre1_repo ' + resrc1);
     conduit.info(2, ID_PRFIX+'filter_pre2_forceIn ' + resrc1_forceIn);
@@ -87,7 +91,7 @@ def init_hook(conduit):
     conduit.info(2, ID_PRFIX+'filter_unpack ' + resrc3);
     conduit.info(2, ID_PRFIX+'quit_after_unpack ' + str(exitAfterUnpack));
     conduit.info(2, ID_PRFIX+'trim_epoch ' + str(trimEpoch));
-    conduit.info(2, ID_PRFIX+'group_subpackages ' + str(groupSubpackages));
+    conduit.info(2, ID_PRFIX+'group_subpackages ' + groupSubpackagesSrc);
     global debuglevel
     debuglevel = conduit.getConf().debuglevel;
     conduit.info(3, ID_PRFIX+'debuglevel ' + str(debuglevel));
@@ -112,7 +116,7 @@ def preresolve_hook(conduit):
     conduit.info(3, conduit);
     conduit.info(3, '* *3* *');
     global allpkgs
-    allpkgs = conduit.getPackages()  #allpackages from all repos
+    allpkgs = conduit.getPackages()  #all packages from all repos
     lmatching = []
     lNmatching = []
     conduit.info(2, ID_PRFIX+'applying filter_pre1_repo:');
@@ -206,6 +210,18 @@ def predownload_hook(conduit):
     for s in lnw:
         lorig.append(s)
 
+def getEpoch(s):
+    index = s.find(":")
+    if index < 0:
+        return ("", s);
+    return  (s[:index], s[index+1:])
+    
+    
+def getArch(s):
+    index = s.rfind(".")
+    if index < 0:
+        return (s,"");
+    return  (s[:index], s[index+1:])
 
 #yum.plugins.DownloadPluginConduit
 #http://yum.baseurl.org/api/yum-3.2.26/yum.plugins.DownloadPluginConduit-class.html ?
@@ -219,23 +235,38 @@ def postdownload_hook(conduit):
         os.makedirs(path)
 
     for s in lorig:
-        name = s.ui_envra
+        #if package is subpackage, this is his parent. We will use it for matching
+        basePackageName = s.base_package_name
+        basePackageEpoch = getEpoch(s.envra)[0]
+        #aprox, noarch needs special handling
+        basePackageAproxArch = getArch(s.envra)[1]
+        basePackageENVRA=basePackageEpoch+":"+basePackageName+"-"+s.printVer()+"."+basePackageAproxArch
+        #name = s.ui_envra
+        #include epoch always if enabled
+        name = s.envra
+        # epoch is included in regex anyway
         if pattern3.match(name):
             conduit.info(3, ID_PRFIX+name + ' matching ' + resrc3)
+            if name == basePackageENVRA:
+                conduit.info(2, ID_PRFIX+name+" is main package itself");
+            else:
+                conduit.info(2, ID_PRFIX+name+" is subpackage of " + getArch(basePackageENVRA)[0]);
+            if trimEpoch:
+                name = getEpoch(name)[1]
             conduit.info(2, ID_PRFIX+"Proecessing:" + s.localPkg());
-            xcwd=path+"/"+s.ui_envra
+            xcwd=path+"/"+name
             if not os.path.exists(xcwd):
                 os.makedirs(xcwd)
             else:
-                conduit.info(2, ID_PRFIX+'WARNING ' + s.ui_envra + " already unpacked in " + path);
+                conduit.info(2, ID_PRFIX+'WARNING ' + name + " already unpacked in " + path);
             if debuglevel < 3:
                 FNULL = open(os.devnull, 'w')
             else:
                 FNULL=PIPE
-            p1 = Popen(["rpm2cpio", s.localPkg()], stdout=PIPE, stderr=None, preexec_fn=None, close_fds=False, shell=False, cwd=xcwd)
-            p2 = Popen(["cpio", "-idmv"], stdin=p1.stdout, stdout=FNULL, stderr=FNULL, preexec_fn=None, close_fds=False, shell=False, cwd=xcwd)
-            p1.stdout.close()  # Allow p1 to receive a SIGPIPE if p2 exits.
-            output = p2.communicate()[0]
+            #p1 = Popen(["rpm2cpio", s.localPkg()], stdout=PIPE, stderr=None, preexec_fn=None, close_fds=False, shell=False, cwd=xcwd)
+            #p2 = Popen(["cpio", "-idmv"], stdin=p1.stdout, stdout=FNULL, stderr=FNULL, preexec_fn=None, close_fds=False, shell=False, cwd=xcwd)
+            #p1.stdout.close()  # Allow p1 to receive a SIGPIPE if p2 exits.
+            #output = p2.communicate()[0]
         else:
             conduit.info(2, ID_PRFIX+name + ' NOT matching ' + resrc3)
     if exitAfterUnpack:
