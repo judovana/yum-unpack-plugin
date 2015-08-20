@@ -5,6 +5,8 @@ from subprocess import call, Popen, PIPE
 import subprocess
 import re
 import os
+import sys
+import fileinput
 
 requires_api_version = '2.3'
 plugin_type = (TYPE_CORE, TYPE_INTERACTIVE)
@@ -235,3 +237,28 @@ def pretrans_hook(conduit):
     conduit.info(3, '* *7* *');
     # did nto find a way how to access downlaoded package here
     #raise PluginYumExit('addjava plugin terminated execution here')
+
+
+
+if __name__ == '__main__':
+    for idx, val in enumerate(sys.argv):
+        if idx == 0:
+            continue
+        print  "compiling " + val
+        re.compile(val)
+        print  "done"
+    print  "You cannow type  strings which will be tried if they match your regexes from commandline."
+    print  "press ctrl+D or ctrl+C to end"
+    while True:
+        s = sys.stdin.readline()
+        if not s:
+            break
+        s = s.rstrip()
+        for idx, val in enumerate(sys.argv):
+            if idx == 0:
+                continue
+            print  "'"+s + "' matches '" + val + "' ?"
+            if re.compile(val).match(s):
+                print  " True"
+            else:
+                print  " False"
