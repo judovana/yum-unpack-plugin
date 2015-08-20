@@ -37,12 +37,12 @@ groupSubpackages = None
 
 
 def init_hook(conduit):
-    conduit.info(2, '***********************WARNING**************************');
+    conduit.info(2, '***************************WARNING*****************************');
     conduit.info(2, '                 Unpack plugin active')
     conduit.info(2, 'Selected packagesunpacked to /opt or where destination in unpack.conf points.')
     conduit.info(2, 'Special exclusion/forcing from that confing is cosidered.')
     conduit.info(2, 'See the README.md page of and unpack.conf and eventuelly also unpack.py for more info.')
-    conduit.info(2, '********************************************************');
+    conduit.info(2, '***************************************************************');
     global path
     global exitAfterUnpack
     global resrc1
@@ -223,6 +223,34 @@ def getArch(s):
         return (s,"");
     return  (s[:index], s[index+1:])
 
+def getParentInTransactionArch(tl, parent):
+    result = []
+    for s in tl:
+        if s.envra == parent:
+            result.append(s)
+    return result
+
+def isParentInTransactionArch(tl, parent):
+    #retyping :(
+    if not getParentInTransactionArch(tl, parent):
+        return False
+    else:
+        return True
+
+def getParentInTransaction(tl, parent):
+    result = []
+    for s in tl:
+        if getArch(s.envra)[0] == getArch(parent)[0]:
+            result.append(s)
+    return result
+
+def isParentInTransaction(tl, parent):
+    #retyping :(
+    if not getParentInTransaction(tl, parent):
+        return False
+    else:
+        return True
+
 #yum.plugins.DownloadPluginConduit
 #http://yum.baseurl.org/api/yum-3.2.26/yum.plugins.DownloadPluginConduit-class.html ?
 def postdownload_hook(conduit):
@@ -240,12 +268,15 @@ def postdownload_hook(conduit):
         basePackageEpoch = getEpoch(s.envra)[0]
         #aprox, noarch needs special handling
         basePackageAproxArch = getArch(s.envra)[1]
-        basePackageENVRA=basePackageEpoch+":"+basePackageName+"-"+s.printVer()+"."+basePackageAproxArch
+        basePackageENVRA=basePackageEpoch+":"+basePackageName+"-"+getEpoch(s.printVer())[1]+"."+basePackageAproxArch
         #name = s.ui_envra
         #include epoch always if enabled
         name = s.envra
+        #noarch subpackages may unpack to more then one arches of parent-package
+        names = []
         # epoch is included in regex anyway
         if pattern3.match(name):
+            conduit.info(2, '***************************************************************');
             group = False
             conduit.info(3, ID_PRFIX+name + ' matching ' + resrc3)
             if name == basePackageENVRA:
@@ -262,22 +293,39 @@ def postdownload_hook(conduit):
             if group and basePackageAproxArch != "noarch":
                 name=basePackageENVRA
             if group and basePackageAproxArch == "noarch":
-                conduit.info(2, ID_PRFIX+"This package is subpackage and should be grupped.However is noarch. Currently I dont know what to do with noarchs. NOT grouping");
-            if trimEpoch:
-                name = getEpoch(name)[1]
-            xcwd=path+"/"+name
-            if not os.path.exists(xcwd):
-                os.makedirs(xcwd)
-            else:
-                conduit.info(2, ID_PRFIX+'WARNING ' + name + " already unpacked in " + path);
-            if debuglevel < 3:
-                FNULL = open(os.devnull, 'w')
-            else:
-                FNULL=PIPE
-            p1 = Popen(["rpm2cpio", s.localPkg()], stdout=PIPE, stderr=None, preexec_fn=None, close_fds=False, shell=False, cwd=xcwd)
-            p2 = Popen(["cpio", "-idmv"], stdin=p1.stdout, stdout=FNULL, stderr=FNULL, preexec_fn=None, close_fds=False, shell=False, cwd=xcwd)
-            p1.stdout.close()  # Allow p1 to receive a SIGPIPE if p2 exits.
-            output = p2.communicate()[0]
+                if  isParentInTransactionArch(lorig, basePackageENVRA):
+                    conduit.info(2, ID_PRFIX+"Although this package is subpackage and is noarch, its parent seems to be noarch too, continue in grouping");
+                    name=basePackageENVRA
+                else:
+                    conduit.info(2, ID_PRFIX+"This package is subpackage and should be grupped. However is noarch and its parrent is not noarch. Trying to find arched parrent in transaction");
+                    if  isParentInTransaction(lorig, basePackageENVRA):
+                        found = getParentInTransaction(lorig, basePackageENVRA)
+                        conduit.info(3, ID_PRFIX+"Found: "+str(found));
+                        names = []
+                        for n in found:
+                            names.append(n.envra);
+            if not names:
+                names=[name]
+            for lname in names:
+                if trimEpoch:
+                    lname = getEpoch(lname)[1]
+                xcwd=path+"/"+lname
+                if not os.path.exists(xcwd):
+                    os.makedirs(xcwd)
+                else:
+                    if (group):
+                        conduit.info(2, ID_PRFIX+'info(g) ' + lname + " already unpacked in " + path);
+                    else:
+                        conduit.info(2, ID_PRFIX+'WARNING ' + lname + " already unpacked in " + path);
+                if debuglevel < 3:
+                    FNULL = open(os.devnull, 'w')
+                else:
+                    FNULL=PIPE
+                p1 = Popen(["rpm2cpio", s.localPkg()], stdout=PIPE, stderr=None, preexec_fn=None, close_fds=False, shell=False, cwd=xcwd)
+                p2 = Popen(["cpio", "-idmv"], stdin=p1.stdout, stdout=FNULL, stderr=FNULL, preexec_fn=None, close_fds=False, shell=False, cwd=xcwd)
+                p1.stdout.close()  # Allow p1 to receive a SIGPIPE if p2 exits.
+                output = p2.communicate()[0]
+                conduit.info(2, ID_PRFIX+'Finished ' + s.envra + " to " + xcwd);
         else:
             conduit.info(2, ID_PRFIX+name + ' NOT matching ' + resrc3)
     if exitAfterUnpack:
