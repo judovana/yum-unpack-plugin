@@ -31,6 +31,9 @@ exitAfterUnpack = False
 allpkgs = None
 trimEpoch = False
 groupSubpackages = None
+allowFakeTransaction = False
+fakeTransRemoval = re.compile(".*FakePackageToBeRemoved.*")
+
 
 # all conduits described at http://yum.baseurl.org/api/yum/yum/plugins.html
 # the hooks in http://yum.baseurl.org/wiki/WritingYumPlugins are not in any order, here they are ordered as yum is launching them
@@ -58,6 +61,7 @@ def init_hook(conduit):
     global pattern2
     global pattern3
     global groupSubpackages
+    global allowFakeTransaction
     s = conduit.confString('main', 'destination', path)
     path = s
     s = conduit.confString('main', 'filter_pre1_repo', resrc1)
@@ -72,6 +76,8 @@ def init_hook(conduit):
     resrc3 = s
     s = conduit.confBool('main', 'quit_after_unpack', False)
     exitAfterUnpack = s
+    s = conduit.confBool('main', 'fake_transaction', False)
+    allowFakeTransaction = s
     s = conduit.confBool('main', 'trim_epoch', False)
     trimEpoch = s
     s = conduit.confString('main', 'group_subpackages', groupSubpackagesSrc)
@@ -92,23 +98,86 @@ def init_hook(conduit):
     conduit.info(2, ID_PRFIX+'quit_after_unpack ' + str(exitAfterUnpack));
     conduit.info(2, ID_PRFIX+'trim_epoch ' + str(trimEpoch));
     conduit.info(2, ID_PRFIX+'group_subpackages ' + groupSubpackagesSrc);
+    conduit.info(2, ID_PRFIX+'fake_transaction ' + str(allowFakeTransaction));
     global debuglevel
     debuglevel = conduit.getConf().debuglevel;
     conduit.info(3, ID_PRFIX+'debuglevel ' + str(debuglevel));
 
 
+def config_hook(conduit):
+        parser = conduit.getOptParser()
+        parser.add_option('', '--unpack-only', dest='unpack_only',
+                action='store_true', default=False,
+                help="will overwrite unpack plugins seetings and will only unpack specified packages ")
+
+def store_true(conduit):
+	conduit.info(2, '* *?* *');
 
 #yum.plugins.PostRepoSetupPluginConduit
 def postreposetup_hook(conduit):
     conduit.info(3, conduit);
     conduit.info(3, '* *1* *');
-    #python dont like mepty methods, s having those numbering there
+    #overwriting unpack-only here
+    opts, commands = conduit.getCmdLine()
+    if opts.unpack_only:
+        conduit.info(2, ID_PRFIX+' using unpack-only command ');
+        global allowFakeTransaction
+        global pattern1_forceOut
+        global resrc1_forceOut
+        global resrc1_forceIn
+        global pattern1_forceIn
+        resrc1_forceOut = ".*"
+        resrc1_forceIn = ".*"
+        pattern1_forceOut = re.compile(resrc1_forceOut)
+        pattern1_forceIn = re.compile(resrc1_forceIn)
+        allowFakeTransaction = True
+
+class _Fake2:
+	def __getitem__(a,b):
+		return ""
+
+class _Fake3:
+	id = "a"
+
+class _Fake:
+	name = "FakePackageToBeRemoved"
+	provides_names = []
+	obsoletes_names = []
+	requires = []
+	repoid = "a"
+	arch = "noarch"
+	epoch = "0"
+	version = "0.0"
+	release = "0"
+	id = "a"
+	repo = _Fake3()
+	ui_from_repo = "a"
+	size = 0
+	pkgtup = (name, arch, epoch, version, release)
+	def have_fastReturnFileEntries(a):
+		return False
+	def returnPrco(a,b):
+		return []
+	def returnFileTypes(a):
+		return []
+	def returnIdSum(a):
+		return _Fake2()
+	def printVer(a):
+		":)"
+	def verifyLocalPkg(a):
+		return True
+	def verEQ(a,b):
+		return True
 
 #yum.plugins.MainPluginConduit
 def exclude_hook(conduit):
     conduit.info(3, conduit);
     conduit.info(3, '* *2 *');
-    #same effect as in preresolve_hook removal, but much less information about packages    
+    #place to create fake trasnaction for "downlaod only"
+    if allowFakeTransaction:
+	    ts = conduit.getTsInfo()
+	    q = ts.addUpdate(_Fake())
+	    conduit.info(2, ID_PRFIX+'trans have ' + str(len(ts.matchNaevr())));
 
 #yum.plugins.DepsolvePluginConduit
 def preresolve_hook(conduit):
@@ -121,7 +190,6 @@ def preresolve_hook(conduit):
     lNmatching = []
     conduit.info(2, ID_PRFIX+'applying filter_pre1_repo:');
     for s in allpkgs:
-
         name=s.ui_envra 
         if pattern1.match(name):
             conduit.info(4, ID_PRFIX+name + ' matching ' + resrc1)
@@ -157,6 +225,9 @@ def postresolve_hook(conduit):
     conduit.info(2, ID_PRFIX+'applying filter_pre2_forceOut:'); #removal from transaction
     for s in ts.matchNaevr():
         name = s.__str__()
+        if allowFakeTransaction:
+		    if fakeTransRemoval.match(name):
+			    ts.remove((s.name, s.arch, s.epoch, s.version, s.release))
         if pattern1_forceOut.match(name):
             conduit.info(4, ID_PRFIX+name + ' matching ' + resrc1_forceOut)
             lmatching2.append(s)
