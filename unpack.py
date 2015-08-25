@@ -38,6 +38,17 @@ fakeTransRemoval = re.compile(".*FakePackageToBeRemoved.*")
 # all conduits described at http://yum.baseurl.org/api/yum/yum/plugins.html
 # the hooks in http://yum.baseurl.org/wiki/WritingYumPlugins are not in any order, here they are ordered as yum is launching them
 
+def printAll(conduit, a=""):
+    conduit.info(2, ID_PRFIX+a+'unpack to ' + path);
+    conduit.info(2, ID_PRFIX+a+'filter_pre1_repo ' + resrc1);
+    conduit.info(2, ID_PRFIX+a+'filter_pre2_forceIn ' + resrc1_forceIn);
+    conduit.info(2, ID_PRFIX+a+'filter_pre2_forceOut ' + resrc1_forceOut);
+    conduit.info(2, ID_PRFIX+a+'filter_post ' + resrc2);
+    conduit.info(2, ID_PRFIX+a+'filter_unpack ' + resrc3);
+    conduit.info(2, ID_PRFIX+a+'quit_after_unpack ' + str(exitAfterUnpack));
+    conduit.info(2, ID_PRFIX+a+'trim_epoch ' + str(trimEpoch));
+    conduit.info(2, ID_PRFIX+a+'group_subpackages ' + groupSubpackagesSrc);
+    conduit.info(2, ID_PRFIX+a+'fake_transaction ' + str(allowFakeTransaction));
 
 def init_hook(conduit):
     conduit.info(2, '***************************WARNING*****************************');
@@ -89,29 +100,16 @@ def init_hook(conduit):
     pattern3 = re.compile(resrc3)
     pattern3 = re.compile(resrc3)
     groupSubpackages  = re.compile(groupSubpackagesSrc)
-    conduit.info(2, ID_PRFIX+'unpack to ' + path);
-    conduit.info(2, ID_PRFIX+'filter_pre1_repo ' + resrc1);
-    conduit.info(2, ID_PRFIX+'filter_pre2_forceIn ' + resrc1_forceIn);
-    conduit.info(2, ID_PRFIX+'filter_pre2_forceOut ' + resrc1_forceOut);
-    conduit.info(2, ID_PRFIX+'filter_post ' + resrc2);
-    conduit.info(2, ID_PRFIX+'filter_unpack ' + resrc3);
-    conduit.info(2, ID_PRFIX+'quit_after_unpack ' + str(exitAfterUnpack));
-    conduit.info(2, ID_PRFIX+'trim_epoch ' + str(trimEpoch));
-    conduit.info(2, ID_PRFIX+'group_subpackages ' + groupSubpackagesSrc);
-    conduit.info(2, ID_PRFIX+'fake_transaction ' + str(allowFakeTransaction));
+    printAll(conduit)
     global debuglevel
     debuglevel = conduit.getConf().debuglevel;
     conduit.info(3, ID_PRFIX+'debuglevel ' + str(debuglevel));
 
-
 def config_hook(conduit):
         parser = conduit.getOptParser()
-        parser.add_option('', '--unpack-only', dest='unpack_only',
+        parser.add_option('', '--unpack-all', dest='unpack_all',
                 action='store_true', default=False,
                 help="will overwrite unpack plugins seetings and will only unpack specified packages ")
-
-def store_true(conduit):
-	conduit.info(2, '* *?* *');
 
 #yum.plugins.PostRepoSetupPluginConduit
 def postreposetup_hook(conduit):
@@ -119,19 +117,39 @@ def postreposetup_hook(conduit):
     conduit.info(3, '* *1* *');
     #overwriting unpack-only here
     opts, commands = conduit.getCmdLine()
-    if opts.unpack_only:
-        conduit.info(2, ID_PRFIX+' using unpack-only command ');
-        global allowFakeTransaction
-        global pattern1_forceOut
-        global resrc1_forceOut
+    if opts.unpack_all:
+        conduit.info(2, ID_PRFIX+' using unpack-only command =>');
+        global exitAfterUnpack
+        global resrc1
         global resrc1_forceIn
+        global resrc1_forceOut
+        global resrc2
+        global resrc3
+        global pattern1
         global pattern1_forceIn
+        global pattern1_forceOut
+        global pattern2
+        global pattern3
+        global allowFakeTransaction
+        resrc1=".*"
+        resrc2=".*"
+        resrc3=".*"
         resrc1_forceOut = ".*"
-        resrc1_forceIn = ".*"
+        resrc1_forceIn = ".*"+str(commands[-1].replace("*",".*"))+".*"
+        pattern1 = re.compile(resrc1)
+        pattern2 = re.compile(resrc2)
+        pattern3 = re.compile(resrc3)
         pattern1_forceOut = re.compile(resrc1_forceOut)
         pattern1_forceIn = re.compile(resrc1_forceIn)
         allowFakeTransaction = True
+        exitAfterUnpack = True
+        #smuggling also --setopt=protected_multilib=false
+        conduit.getConf().protected_multilib = False
+        printAll(conduit,"    ")
+        conduit.info(2, ID_PRFIX+"    --setopt=protected_multilib=false")
 
+
+#three classes to smugle one fake transaction meber (removed later!) so yum dont die with "nothing to do"
 class _Fake2:
 	def __getitem__(a,b):
 		return ""
@@ -177,7 +195,6 @@ def exclude_hook(conduit):
     if allowFakeTransaction:
 	    ts = conduit.getTsInfo()
 	    q = ts.addUpdate(_Fake())
-	    conduit.info(2, ID_PRFIX+'trans have ' + str(len(ts.matchNaevr())));
 
 #yum.plugins.DepsolvePluginConduit
 def preresolve_hook(conduit):
