@@ -31,6 +31,7 @@ and smuggle inside all PACKAGES_YOU_WONT (eg all javas) ever released for this p
 If you are facing multilib issues (and you probably are unless you specify correct ENVRA into regex), use --setopt=protected_multilib=false
 Then unpack them all to destination, so I can diff them.
 See also quit_after_unpack = True. It is highly recommended to abort yum after unpacking, otherwise your system may be terribly damaged.
+This scenario is accessible via shortcut of --unpack-all
 
 Note, this plugin have to had valid transaction at the input right now, otherwise it will notproceed.
 
