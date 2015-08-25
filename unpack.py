@@ -135,7 +135,7 @@ def postreposetup_hook(conduit):
         resrc2=".*"
         resrc3=".*"
         resrc1_forceOut = ".*"
-        resrc1_forceIn = ".*"+str(commands[-1].replace("*",".*"))+".*"
+        resrc1_forceIn = ".*"+str(commands[-1].replace("*",".*"))
         pattern1 = re.compile(resrc1)
         pattern2 = re.compile(resrc2)
         pattern3 = re.compile(resrc3)
