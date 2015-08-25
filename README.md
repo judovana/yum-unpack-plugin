@@ -48,8 +48,9 @@ trim_epoch, by default False
   and
 group_subpackages, by default NothingCanMatchMe
 
-Normally packages are saved in format ENVRA but if you are monitoring single epoch pacakge, then it have quit a lot of sense to turn it to True, and so have only NVRA unapcked directory
-Also every subpackage is extracted to its own directory. When yo wont some packages (anything mathching that regex)  to have theirs subpackages included in one tree, put it here.
+Normally packages are saved in format NVRA but if you are monitoring multi epoch pacakge, then it have quit a lot of sense to turn it to False, and so have full ENVRA as unapcked directory
+
+Also every subpackage is trying to be extracted to its SRPMA directory. When yo wont some packages to unpack to thirs own directory, (anything mathching that regex goes to SRPMA) specify the ones via group_subpackages field.
 For usecae 2, you  you probably wont same regex as for filter_pre2_forceIn or simply .*
 Small example. Consider you have package
 pkg in epoch 1 version 1. It will build for both intels 64 and 32 as:
@@ -74,7 +75,7 @@ destination/pkg-1.i686/usr/lib/pkg.so.full
 destination/pkg-1.i686/usr/share/pkg.txt
 
 **note**
-If you are yusing sgrouping, and subpackage is NOARCH,  parent package MUST APPEAR in transaction, otherwise this subpackage will not be groouped (will unpacak normally)
+If you are yusing grouping, and subpackage is NOARCH,  parent package MUST APPEAR in transaction, otherwise this subpackage will not be groouped (will unpacak normally)
 This is happening, because for noarch packages parent can be arched, so it can not be plainly guessed (like with arched subpackages).
 
 The unpack.py can serve also as simple program, where you can test your regexes. see eg:
